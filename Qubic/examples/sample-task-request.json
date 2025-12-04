@@ -1,0 +1,10 @@
+{
+  "task_type": "monitor_wallet",
+  "wallet_address": "0x1234567890abcdef",
+  "description": "Monitor wallet balance for potential breaches",
+  "parameters": {
+    "alert_threshold": 100.0,
+    "monitoring_duration": 3600
+  }
+}
+
