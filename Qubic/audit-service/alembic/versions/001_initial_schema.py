@@ -28,7 +28,7 @@ def upgrade() -> None:
         sa.Column('status', sa.String(), nullable=True),
         sa.Column('timestamp', sa.DateTime(), nullable=True),
         sa.Column('qubic_txid', sa.String(), nullable=True),
-        sa.Column('metadata', sa.Text(), nullable=True),
+        sa.Column('metadata_json', sa.Text(), nullable=True),
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_audit_logs_task_id'), 'audit_logs', ['task_id'], unique=False)

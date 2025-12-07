@@ -9,7 +9,7 @@ import httpx
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
-from sqlalchemy import create_engine, Column, String, Integer, DateTime, Boolean, Text
+from sqlalchemy import create_engine, Column, String, Integer, DateTime, Boolean, Text, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -69,10 +69,9 @@ class AuditLog(Base):
     status = Column(String)
     timestamp = Column(DateTime, default=datetime.utcnow)
     qubic_txid = Column(String, nullable=True)
-    metadata = Column(Text)  # JSON string
+    metadata_json = Column(Text)  # JSON string (renamed from 'metadata' to avoid SQLAlchemy conflict)
 
-# Create tables
-Base.metadata.create_all(bind=engine)
+# Tables are created via Alembic migrations, not here
 
 # Configuration
 QUBIC_SERVICE_URL = os.getenv("QUBIC_SERVICE_URL", "http://localhost:8001")
@@ -114,7 +113,7 @@ async def health_check():
     try:
         # Check database connection
         db = SessionLocal()
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         db.close()
         return {"status": "healthy", "service": "audit-service"}
     except Exception as e:
@@ -140,7 +139,7 @@ async def record_audit(request: AuditRecordRequest):
             input_hash=input_hash,
             output_hash=output_hash,
             status="recorded",
-            metadata=json.dumps({
+            metadata_json=json.dumps({
                 "input_data": request.input_data,
                 "output_data": request.output_data
             })

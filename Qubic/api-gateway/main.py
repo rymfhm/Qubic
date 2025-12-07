@@ -6,6 +6,7 @@ FastAPI gateway with OAuth-ready authentication and REST endpoints
 import os
 import logging
 import httpx
+import json
 from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -116,7 +117,7 @@ async def start_task(
         "updated_at": datetime.utcnow().isoformat(),
         "user_id": user["user_id"],
         "description": request.description,
-        "parameters": request.parameters or {}
+        "parameters": json.dumps(request.parameters or {})  # Convert dict to JSON string
     }
     
     redis_client.hset(f"task:{task_id}", mapping=task_data)
@@ -175,6 +176,8 @@ async def get_task_status(
         raise HTTPException(status_code=404, detail="Task not found")
     
     # Check with agent runtime for latest status
+    requires_approval = False
+    current_step = None
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             runtime_response = await client.get(
@@ -182,9 +185,18 @@ async def get_task_status(
             )
             if runtime_response.status_code == 200:
                 runtime_data = runtime_response.json()
-                task_data.update(runtime_data)
+                requires_approval = runtime_data.get("requires_approval", False)
+                current_step = runtime_data.get("current_step")
+                # Update task_data with status
+                task_data["status"] = runtime_data.get("status", task_data.get("status", "unknown"))
     except Exception as e:
         logger.warning(f"Could not fetch runtime status: {e}")
+        # Fallback to Redis data
+        requires_approval_str = task_data.get("requires_approval", "false")
+        if isinstance(requires_approval_str, bool):
+            requires_approval = requires_approval_str
+        else:
+            requires_approval = requires_approval_str.lower() == "true"
     
     return TaskStatusResponse(
         task_id=task_id,
@@ -192,8 +204,8 @@ async def get_task_status(
         created_at=task_data.get("created_at", ""),
         updated_at=task_data.get("updated_at", ""),
         plan_id=task_data.get("plan_id"),
-        current_step=int(task_data.get("current_step", 0)) if task_data.get("current_step") else None,
-        requires_approval=task_data.get("requires_approval", "false").lower() == "true"
+        current_step=current_step if current_step is not None else (int(task_data.get("current_step", 0)) if task_data.get("current_step") else None),
+        requires_approval=requires_approval
     )
 
 @app.post("/task/{task_id}/approve", response_model=ApprovalResponse)
